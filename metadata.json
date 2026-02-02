@@ -1,0 +1,8 @@
+{
+  "name": "Finance Flow",
+  "description": "An intelligent, automated wealth tracking application powered by Gemini AI. Features zero-effort logging via receipt scanning and bank text parsing.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
