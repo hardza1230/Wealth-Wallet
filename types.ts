@@ -18,6 +18,7 @@ export interface FinancialInsight {
   savingsTip: string;
   spendingTrend: 'UP' | 'DOWN' | 'STABLE';
   healthScore: number; // 0-100
+  financialRank: string; // Gamification Title (e.g. "Wealth Wizard")
 }
 
 export interface ViewState {

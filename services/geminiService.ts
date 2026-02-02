@@ -8,6 +8,7 @@ const modelName = 'gemini-3-flash-preview';
 
 /**
  * Parses raw text or image input into a structured Transaction object.
+ * Specialized for Thai Banking Apps (K+, SCB, KMA, Next).
  */
 export const parseTransactionWithAI = async (
   textInput: string,
@@ -15,15 +16,33 @@ export const parseTransactionWithAI = async (
 ): Promise<Omit<Transaction, 'id'>> => {
   
   const systemInstruction = `
-    You are an expert financial data assistant for the 'Finance Flow' app.
-    Your task is to extract transaction details from the provided text (e.g., bank SMS, copied text) or receipt image.
+    You are an expert financial data assistant for 'Finance Flow'.
+    Your task: Extract transaction details from Thai Bank App notifications (SMS/Push) or Receipt images.
     
-    Rules:
-    1. Identify the Amount, Merchant/Payee, Date, and Category.
-    2. Determine if it is INCOME or EXPENSE.
-    3. Generate a short, clear description in Thai (if the input is Thai) or English.
-    4. If the date is missing, use today's date (${new Date().toISOString().split('T')[0]}).
-    5. Be precise with numbers.
+    CRITICAL RULES FOR THAI BANKING CONTEXT:
+    1. **Transaction Type Detection**:
+       - INCOME keywords: "เงินเข้า", "รับโอนจาก", "Deposit", "Received from", "Xfer from", "โอนเงินเข้า"
+       - EXPENSE keywords: "โอนเงินไป", "ถอนเงิน", "ชำระเงิน", "จ่ายบิล", "Paid to", "Transfer to", "Purchase", "Withdrawal", "Payment"
+    
+    2. **Merchant/Payee Normalization (Smart Labeling)**:
+       - "7-11", "Seven Eleven", "7-Eleven Thailand" -> Set Merchant to "7-Eleven"
+       - "Mcd", "McDonald" -> "McDonald's"
+       - "Starbucks Coffee" -> "Starbucks"
+       - "Grab", "GrabFood", "GrabTaxi" -> "Grab"
+       - "Lineman" -> "LINE MAN"
+       - If it's a personal transfer (e.g., "Mr. Somchai"), keep the name as Merchant.
+
+    3. **Category Logic**:
+       - "7-Eleven", "FamilyMart" -> "Convenience Store"
+       - "KFC", "Bonchon", "MK" -> "Food & Beverage"
+       - "BTS", "MRT", "Expressway" -> "Transport"
+       - "Netflix", "Spotify", "Youtube" -> "Subscription"
+    
+    4. **Date & Description**:
+       - If date is missing, use today: ${new Date().toISOString().split('T')[0]}.
+       - Description: Summarize the action in Thai if the input is Thai (e.g. "ค่าอาหารกลางวัน", "โอนคืนเพื่อน").
+
+    5. **Strict JSON Output**: Ensure numbers are pure integers/floats (no currency symbols).
   `;
 
   const parts: any[] = [];
@@ -31,18 +50,17 @@ export const parseTransactionWithAI = async (
   if (imageBase64) {
     parts.push({
       inlineData: {
-        mimeType: 'image/jpeg', // Assuming jpeg for simplicity, strictly handled in UI
+        mimeType: 'image/jpeg',
         data: imageBase64
       }
     });
-    parts.push({ text: "Analyze this receipt image." });
+    parts.push({ text: "Analyze this receipt/slip image." });
   }
 
   if (textInput) {
     parts.push({ text: `Analyze this text: "${textInput}"` });
   }
 
-  // Schema for structured output
   const response = await ai.models.generateContent({
     model: modelName,
     contents: { parts },
@@ -56,7 +74,7 @@ export const parseTransactionWithAI = async (
           merchant: { type: Type.STRING },
           date: { type: Type.STRING, description: "ISO 8601 format YYYY-MM-DD" },
           description: { type: Type.STRING },
-          category: { type: Type.STRING, description: "e.g., Food, Transport, Salary, Bills" },
+          category: { type: Type.STRING },
           type: { type: Type.STRING, enum: [TransactionType.INCOME, TransactionType.EXPENSE] }
         },
         required: ["amount", "merchant", "date", "description", "category", "type"]
@@ -72,33 +90,39 @@ export const parseTransactionWithAI = async (
 };
 
 /**
- * Generates financial insights based on transaction history.
+ * Generates financial insights with Gamification (Rank/Score).
  */
 export const generateWeeklyInsight = async (transactions: Transaction[]): Promise<FinancialInsight> => {
-  const txData = JSON.stringify(transactions.slice(0, 20)); // Limit to last 20 for context window efficiency
+  const txData = JSON.stringify(transactions.slice(0, 30)); 
 
   const systemInstruction = `
-    You are a financial coach. Analyze the recent transaction history and provide a summary, a specific saving tip, and a health score.
-    Input JSON: ${txData}
-    
-    Output Language: Thai (Make it friendly and encouraging).
+    You are a Gamified Financial Coach. 
+    Analyze the transaction history and calculate a "Health Score" (0-100) and assign a "Financial Rank".
+
+    Ranking System:
+    - 0-49: "Novice Spender" (ผู้เริ่มต้นเก็บเงิน) - Needs improvement.
+    - 50-79: "Smart Saver" (นักออมมือโปร) - Doing well.
+    - 80-100: "Wealth Wizard" (พ่อมดการเงิน) - Excellent financial habits.
+
+    Output Language: Thai (Make it fun, encouraging, and game-like).
   `;
 
   const response = await ai.models.generateContent({
     model: modelName,
-    contents: "Analyze my spending habits.",
+    contents: "Analyze my spending and give me my rank.",
     config: {
       systemInstruction,
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          summary: { type: Type.STRING, description: "Brief summary of spending behavior (max 2 sentences)" },
-          savingsTip: { type: Type.STRING, description: "Actionable advice to save money" },
+          summary: { type: Type.STRING, description: "Brief analysis" },
+          savingsTip: { type: Type.STRING, description: "Specific advice" },
           spendingTrend: { type: Type.STRING, enum: ['UP', 'DOWN', 'STABLE'] },
-          healthScore: { type: Type.NUMBER, description: "0 to 100 integer representing financial health" }
+          healthScore: { type: Type.NUMBER, description: "0-100" },
+          financialRank: { type: Type.STRING, description: "The gamified title based on score" }
         },
-        required: ["summary", "savingsTip", "spendingTrend", "healthScore"]
+        required: ["summary", "savingsTip", "spendingTrend", "healthScore", "financialRank"]
       }
     }
   });
