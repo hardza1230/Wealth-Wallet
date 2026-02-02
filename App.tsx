@@ -5,7 +5,7 @@ import InsightCard from './components/InsightCard';
 import PremiumTeaser from './components/PremiumTeaser';
 import { Transaction, ViewState, TransactionType } from './types';
 
-// Initial Mock Data to make the app look good on first load
+// Initial Mock Data (Fallback)
 const INITIAL_TRANSACTIONS: Transaction[] = [
   { id: '1', amount: 35000, category: 'Salary', date: '2023-10-01', description: 'Monthly Salary', merchant: 'Company Inc', type: TransactionType.INCOME },
   { id: '2', amount: 1500, category: 'Utilities', date: '2023-10-05', description: 'Electric Bill', merchant: 'MEA', type: TransactionType.EXPENSE },
@@ -15,8 +15,24 @@ const INITIAL_TRANSACTIONS: Transaction[] = [
 
 const App: React.FC = () => {
   const [viewState, setViewState] = useState<ViewState['currentView']>('dashboard');
-  const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
+  
+  // Persistence: Load from Local Storage or use Initial Data
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    try {
+      const saved = localStorage.getItem('finance_flow_transactions');
+      return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
+    } catch (e) {
+      console.error("Failed to load transactions", e);
+      return INITIAL_TRANSACTIONS;
+    }
+  });
+
   const [showAddModal, setShowAddModal] = useState(false);
+
+  // Persistence: Save to Local Storage whenever transactions change
+  useEffect(() => {
+    localStorage.setItem('finance_flow_transactions', JSON.stringify(transactions));
+  }, [transactions]);
 
   const handleAddTransaction = (tx: Transaction) => {
     setTransactions((prev) => [...prev, tx]);
@@ -63,6 +79,7 @@ const App: React.FC = () => {
             <Dashboard 
               transactions={transactions} 
               onAddClick={() => setShowAddModal(true)} 
+              onTransactionAdd={handleAddTransaction}
             />
           </>
         )}

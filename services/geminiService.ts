@@ -25,22 +25,26 @@ export const parseTransactionWithAI = async (
        - EXPENSE keywords: "โอนเงินไป", "ถอนเงิน", "ชำระเงิน", "จ่ายบิล", "Paid to", "Transfer to", "Purchase", "Withdrawal", "Payment"
     
     2. **Merchant/Payee Normalization (Smart Labeling)**:
-       - "7-11", "Seven Eleven", "7-Eleven Thailand" -> Set Merchant to "7-Eleven"
+       - "CP ALL", "7-11", "Seven Eleven" -> Set Merchant to "7-Eleven"
        - "Mcd", "McDonald" -> "McDonald's"
        - "Starbucks Coffee" -> "Starbucks"
-       - "Grab", "GrabFood", "GrabTaxi" -> "Grab"
+       - "MEA", "การไฟฟ้านครหลวง", "PEA" -> "Electric Bill" (ค่าไฟฟ้า)
+       - "MWA", "การประปา" -> "Water Bill" (ค่าน้ำ)
+       - "AIS", "DTAC", "TRUE" -> "Mobile Bill" (ค่าโทรศัพท์)
+       - "Grab", "GrabFood" -> "Grab"
        - "Lineman" -> "LINE MAN"
-       - If it's a personal transfer (e.g., "Mr. Somchai"), keep the name as Merchant.
+       - If it's a personal transfer (e.g., "Mr. Somchai"), keep the name.
 
     3. **Category Logic**:
        - "7-Eleven", "FamilyMart" -> "Convenience Store"
        - "KFC", "Bonchon", "MK" -> "Food & Beverage"
        - "BTS", "MRT", "Expressway" -> "Transport"
-       - "Netflix", "Spotify", "Youtube" -> "Subscription"
+       - "Netflix", "Spotify", "Youtube", "Apple" -> "Subscription"
+       - "Electric Bill", "Water Bill", "Mobile Bill" -> "Utilities"
     
     4. **Date & Description**:
        - If date is missing, use today: ${new Date().toISOString().split('T')[0]}.
-       - Description: Summarize the action in Thai if the input is Thai (e.g. "ค่าอาหารกลางวัน", "โอนคืนเพื่อน").
+       - Description: Summarize the action in Thai if the input is Thai (e.g. "จ่ายค่าไฟ", "ซื้อของเซเว่น").
 
     5. **Strict JSON Output**: Ensure numbers are pure integers/floats (no currency symbols).
   `;
@@ -96,20 +100,23 @@ export const generateWeeklyInsight = async (transactions: Transaction[]): Promis
   const txData = JSON.stringify(transactions.slice(0, 30)); 
 
   const systemInstruction = `
-    You are a Gamified Financial Coach. 
-    Analyze the transaction history and calculate a "Health Score" (0-100) and assign a "Financial Rank".
+    You are a friendly, witty AI Financial Companion. 
+    Analyze the transaction history and calculate a "Wealth Score" (0-100).
 
     Ranking System:
-    - 0-49: "Novice Spender" (ผู้เริ่มต้นเก็บเงิน) - Needs improvement.
-    - 50-79: "Smart Saver" (นักออมมือโปร) - Doing well.
-    - 80-100: "Wealth Wizard" (พ่อมดการเงิน) - Excellent financial habits.
+    - 0-49: "Novice Spender" (ผู้เริ่มต้นเก็บเงิน)
+    - 50-79: "Smart Saver" (นักออมมือโปร)
+    - 80-100: "Wealth Wizard" (พ่อมดการเงิน)
 
-    Output Language: Thai (Make it fun, encouraging, and game-like).
+    Style Guide:
+    - Summary: Short, punchy, and modern.
+    - Savings Tip: Direct and actionable, like a friend whispering a secret. Use emoji.
+    - Output Language: Thai (Fun & Casual).
   `;
 
   const response = await ai.models.generateContent({
     model: modelName,
-    contents: "Analyze my spending and give me my rank.",
+    contents: "Analyze my spending, give me my Wealth Score and a fun tip.",
     config: {
       systemInstruction,
       responseMimeType: "application/json",
